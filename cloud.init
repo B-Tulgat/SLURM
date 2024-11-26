@@ -25,3 +25,11 @@
       - systemctl enable slurmd
       - systemctl restart slurmd
       - systemctl status slurmd
+      - apt-get install -y freeipa-client
+      - ipa-client-install \
+        --principal=admin \
+        --password="${IPA_PASSWORD}" \
+        --server="${IPA_SERVER}" \
+        --realm="${REALM}" \
+        --no-ntp \
+        --unattended
