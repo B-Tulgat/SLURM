@@ -6,7 +6,11 @@ write_files:
       #!/bin/bash
 
       echo "10.10.1.168 ipa-server.c1xacc355.com ipa-server" >> /etc/hosts
-      hostnamectl set-hostname "$(hostname).c1xacc355.com"
+
+      if [[ "$(hostname)" != *".c1xacc355.com" ]]; then
+         hostnamectl set-hostname "$(hostname).c1xacc355.com"
+      fi
+
       A=$(hostname -I)
       echo "$A  $(hostname)" >> /etc/hosts
       IPA_SERVER="ipa-server.c1xacc355.com"
