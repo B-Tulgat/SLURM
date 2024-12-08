@@ -1,11 +1,10 @@
 import subprocess
 
-# Total logical nodes in the partition
-TOTAL_PARTITION_NODES = 10
-
-def run_command(cmd):
-    """Run a shell command and return the output."""
-    return subprocess.check_output(cmd, shell=True, text=True).strip()
+def run_command(cmd, default=""):
+    try:
+        return subprocess.check_output(cmd, shell=True, text=True).strip()
+    except subprocess.CalledProcessError:
+        return default
 
 def get_pending_jobs():
     """Fetch pending jobs from squeue."""
@@ -14,67 +13,58 @@ def get_pending_jobs():
     for line in output.splitlines():
         job_id, partition = line.split()
         pending_jobs.append({"id": job_id, "partition": partition})
+    print(pending_jobs)
     return pending_jobs
 
 def get_job_requirements(job_id):
     """Fetch job requirements using scontrol."""
     job_details = run_command(f"scontrol show job {job_id}")
     # Parse required nodes and CPUs from job details
-    required_nodes = int(next(line.split("=")[1] for line in job_details.split() if line.startswith("NumNodes")))
-    return required_nodes
+    required_nodes = int(next(line.split("=")[1].split("-")[0]
+                          for line in job_details.splitlines()
+                          if line.strip().startswith("NumNodes")))
+    print(f"required nodes: {required_nodes}")
 
-def get_partition_info(partition):
-    """Fetch partition node states."""
-    output = run_command(f"scontrol show nodes | grep PartitionName={partition}")
+    node_details = run_command(f"scontrol show nodes | grep \"State=IDLE+CLOUD \"")
     idle_nodes = 0
-    computation_nodes = 0
+    for line in node_details.splitlines():
+        idle_nodes += 1
 
-    for line in output.splitlines():
-        if "State=IDLE" in line:
-            idle_nodes += 1
-        elif "State=ALLOCATED" in line or "State=MIXED" in line:
-            computation_nodes += 1
+    print(f"idle nodes: {idle_nodes}")
 
-    return idle_nodes, computation_nodes
-
-def resume_nodes(partition, required_nodes):
-    """Resume nodes in the specified partition."""
-    output = run_command(f"scontrol show nodes | grep PartitionName={partition} | grep State=DOWN")
-    nodes_to_resume = []
-
-    for line in output.splitlines():
-        if len(nodes_to_resume) >= required_nodes:
-            break
-        node_name = line.split("NodeName=")[1].split()[0]
-        nodes_to_resume.append(node_name)
-
-    for node in nodes_to_resume:
-        print(f"Resuming node: {node}")
-        run_command(f"scontrol update NodeName={node} State=RESUME")
+    return required_nodes, idle_nodes
 
 def main():
     # Fetch pending jobs
     pending_jobs = get_pending_jobs()
-    for job in pending_jobs[0]:
+    for job in pending_jobs:
         job_id = job["id"]
         partition = job["partition"]
-        print(job)
-        print(job["partition"])
-        print(job["id"])
 
         # Get job requirements
-        required_nodes = get_job_requirements(job_id)
+        required_nodes, idle_nodes = get_job_requirements(job_id)
 
-        # Get partition information
-        idle_nodes, computation_nodes = get_partition_info(partition)
+        payload = f"scontrol show nodes | awk '/NodeName=/ {{node=$1}} /State=DOWN/ {{state=$1}} /Partitions={partition}/ {{partition=$1}} {{if(node && state && partition) {{print node, state, partition; node=\"\"; state=\"\"; partition=\"\"}}}}'"
 
-        # Check if there are enough resources to enroll nodes
-        if TOTAL_PARTITION_NODES - computation_nodes >= required_nodes - idle_nodes:
-            print(f"Enrolling nodes for job {job_id} in partition {partition}")
-            nodes_to_resume = required_nodes - idle_nodes
-            resume_nodes(partition, nodes_to_resume)
+        output = run_command(payload)
+        payload2 = f"scontrol show nodes | awk '/NodeName=/ {{node=$1}} /State=.*NOT_RESPONDING/ {{state=$1}} /Partitions={partition}/ {{partition=$1}} {{if(node && state && partition) {{print node, state, partition; node=\"\"; state=\"\"; partition=\"\"}}}}'"
+        output2 = run_command(payload2)
+        nodes_to_resume = []
+
+        if len(output.splitlines()) + len(output2.splitlines()) < required_nodes - idle_nodes:
+            print("Not enough nodes for this job")
         else:
-            print(f"Insufficient resources to enroll nodes for job {job_id}")
+            for line in output2.splitlines() + output.splitlines():
+                if len(nodes_to_resume) >= required_nodes - idle_nodes:
+                    break
+                node_name = line.split("NodeName=")[1].split()[0]
+                nodes_to_resume.append(node_name)
+
+            print(f"nodes_to_resume: {nodes_to_resume}")
+
+            for node in nodes_to_resume:
+                run_command(f"./start.sh {node.split('.')[0]}")
+
 
 if __name__ == "__main__":
     main()
