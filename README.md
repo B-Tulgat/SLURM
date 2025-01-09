@@ -1,5 +1,5 @@
 
-# CloudCIX HPC Documentation Overview
+# HPC Documentation Overview
 ## Building Blocks
 
 The HPC have the following stack, detoned by firstly the specific tool used and secondly by the type of  function it serves. 
@@ -58,7 +58,7 @@ sudo dnf install -y ipa-server ipa-server-dns bind-dyndb-ldap
 Setup hostname. This hostname is for FreeIPA server to be identified by region name "example.com" will be what you will use as your region throughout the naming scheme of your hostnames thus by extension your NodeNames of SLURM.
 
 ```bash
-sudo hostnamectl set-hostname ipa-server.cloudcix.ie
+sudo hostnamectl set-hostname ipa-server.amon.ie
 ```
 
 Generally
@@ -72,21 +72,21 @@ Afterwhich you install FreeIPA manaully using
 sudo ipa-server-install
 ```
 
-- Domain name (e.g cloudcix.com)
-- Real name (e.g CLOUDCIX.COM) capitalization is important here
+- Domain name (e.g amon.com)
+- Real name (e.g amon.COM) capitalization is important here
 - IPA server hostname (the FQDN you set previously)
 - Directory manager password
 - DNS configuration: YES
 
-After this you should be able to go into the PAM web-interface. Try going to `https://ipa-server.cloudcix.ie/ipa/ui/` or equivalent hostname you have setup.
+After this you should be able to go into the PAM web-interface. Try going to `https://ipa-server.amon.ie/ipa/ui/` or equivalent hostname you have setup.
 
 Afterwhich configure /etc/resolv.conf
 ```bash
-search cloudcix.ie # or different domain name accordingly
+search amon.ie # or different domain name accordingly
 nameserver 10.10.1.168 # the address of the node you have installed the server
 ```
 
-**Note**: If the web interface should appear on the HOST-OS rather than inside the environment you setup you should add the node hostname and address to /etc/hosts of HOST-OS (e.g. echo 10.10.1.168 ipa-server.cloudcix.ie > /etc/hosts)
+**Note**: If the web interface should appear on the HOST-OS rather than inside the environment you setup you should add the node hostname and address to /etc/hosts of HOST-OS (e.g. echo 10.10.1.168 ipa-server.amon.ie > /etc/hosts)
 
 If for some reason the FreeIPA client or the FreeIPA server is not resolving hostnames there is a high probability some other Network Manager is present or as likely some firewall is in effect.
 
@@ -104,15 +104,15 @@ write_files:
       #!/bin/bash
 
       # Update /etc/hosts with IPA server
-      echo "10.10.1.168 ipa-server.cloudcix.ie ipa-server" >> /etc/hosts
-      hostnamectl set-hostname "$(hostname).cloudcix.ie"
+      echo "10.10.1.168 ipa-server.amon.ie ipa-server" >> /etc/hosts
+      hostnamectl set-hostname "$(hostname).amon.ie"
       A=$(hostname -I)
       echo "$A  $(hostname)" >> /etc/hosts
 
       # Set IPA variables
-      IPA_SERVER="ipa-server.cloudcix.ie"
-      IPA_REALM="CLOUDCIX.IE"
-      IPA_DOMAIN="cloudcix.ie"
+      IPA_SERVER="ipa-server.amon.ie"
+      IPA_REALM="amon.IE"
+      IPA_DOMAIN="amon.ie"
 
       # Configure Kerberos settings
       cat << EOF > /etc/krb5.conf
@@ -137,7 +137,7 @@ write_files:
 
       # Configure DNS resolver
       rm -f /etc/resolv.conf
-      echo -e "nameserver 10.10.1.168\nsearch cloudcix.ie" > /etc/resolv.conf
+      echo -e "nameserver 10.10.1.168\nsearch amon.ie" > /etc/resolv.conf
 
       # Run the FreeIPA client installer
       ipa-client-install --domain="$IPA_DOMAIN" \
@@ -166,17 +166,17 @@ write_files:
     content: |
       #!/bin/bash
 
-      echo "10.10.1.168 ipa-server.cloudcix.ie ipa-server" >> /etc/hosts
+      echo "10.10.1.168 ipa-server.amon.ie ipa-server" >> /etc/hosts
 
-      if [[ "$(hostname)" != *".cloudcix.ie" ]]; then
-         hostnamectl set-hostname "$(hostname).cloudcix.ie"
+      if [[ "$(hostname)" != *".amon.ie" ]]; then
+         hostnamectl set-hostname "$(hostname).amon.ie"
       fi
 
       A=$(hostname -I)
       echo "$A  $(hostname)" >> /etc/hosts
-      IPA_SERVER="ipa-server.cloudcix.ie"
-      IPA_REALM="CLOUDCIX.IE"
-      IPA_DOMAIN="cloudcix.ie"
+      IPA_SERVER="ipa-server.amon.ie"
+      IPA_REALM="amon.IE"
+      IPA_DOMAIN="amon.ie"
 
       debconf-set-selections <<< "krb5-config krb5-config/default_realm string $IPA_REALM"
       debconf-set-selections <<< "krb5-config krb5-config/kerberos_servers string $IPA_SERVER"
@@ -188,7 +188,7 @@ write_files:
       apt-get install -y freeipa-client
 
       rm -f /etc/resolv.conf
-      echo -e "nameserver 10.10.1.168\nsearch cloudcix.ie" > /etc/resolv.conf
+      echo -e "nameserver 10.10.1.168\nsearch amon.ie" > /etc/resolv.conf
 
       ipa-client-install --domain="$IPA_DOMAIN" \
         --principal=admin \
@@ -252,17 +252,17 @@ write_files:
     content: |
       #!/bin/bash
 
-      echo "10.10.1.168 ipa-server.cloudcix.ie ipa-server" >> /etc/hosts
+      echo "10.10.1.168 ipa-server.amon.ie ipa-server" >> /etc/hosts
 
-      if [[ "$(hostname)" != *".cloudcix.ie" ]]; then
-         hostnamectl set-hostname "$(hostname).cloudcix.ie"
+      if [[ "$(hostname)" != *".amon.ie" ]]; then
+         hostnamectl set-hostname "$(hostname).amon.ie"
       fi
 
       A=$(hostname -I)
       echo "$A  $(hostname)" >> /etc/hosts
-      IPA_SERVER="ipa-server.cloudcix.ie"
-      IPA_REALM="CLOUDCIX.IE"
-      IPA_DOMAIN="cloudcix.ie"
+      IPA_SERVER="ipa-server.amon.ie"
+      IPA_REALM="amon.IE"
+      IPA_DOMAIN="amon.ie"
 
       debconf-set-selections <<< "krb5-config krb5-config/default_realm string $IPA_REALM"
       debconf-set-selections <<< "krb5-config krb5-config/kerberos_servers string $IPA_SERVER"
@@ -274,7 +274,7 @@ write_files:
       apt-get install -y freeipa-client
 
       rm -f /etc/resolv.conf
-      echo -e "nameserver 10.10.1.168\nsearch cloudcix.ie" > /etc/resolv.conf
+      echo -e "nameserver 10.10.1.168\nsearch amon.ie" > /etc/resolv.conf
 
       ipa-client-install --domain="$IPA_DOMAIN" \
         --principal=admin \
