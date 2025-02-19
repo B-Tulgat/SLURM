@@ -1,0 +1,53 @@
+name: ipa-client
+description: ""
+config:
+  cloud-init.user-data: |
+    #cloud-config
+    write_files:
+      - path: /root/setup-ipa-client.sh
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+
+          echo "10.10.1.151 controller" >> /etc/hosts
+          echo "10.10.1.168 ipa-server.amon.com ipa-server" >> /etc/hosts
+          hostnamectl set-hostname "$(hostname).amon.com"
+          A=$(hostname -I)
+          echo "$A  $(hostname)" >> /etc/hosts
+          IPA_SERVER="ipa-server.amon.com"
+          IPA_REALM="AMON.COM"
+          IPA_DOMAIN="amon.com"
+
+          debconf-set-selections <<< "krb5-config krb5-config/default_realm string $IPA_REALM"
+          debconf-set-selections <<< "krb5-config krb5-config/kerberos_servers string $IPA_SERVER"
+          debconf-set-selections <<< "krb5-config krb5-config/admin_server string $IPA_SERVER"
+          debconf-set-selections <<< "krb5-config krb5-config/realms string $IPA_REALM"
+          debconf-set-selections <<< "krb5-config krb5-config/dns_lookup_realm boolean false"
+          debconf-set-selections <<< "krb5-config krb5-config/dns_lookup_kdc boolean false"
+
+          apt-get install -y freeipa-client
+
+          rm -f /etc/resolv.conf
+          echo -e "nameserver 10.10.1.168\nsearch amon.com" > /etc/resolv.conf
+
+          ipa-client-install --domain="$IPA_DOMAIN" \
+            --principal=admin \
+            --password="qweasdrf" \
+            --server="$IPA_SERVER" \
+            --realm="$IPA_REALM" \
+            --no-ntp \
+            --unattended
+
+    runcmd:
+      - apt update -y
+      - /root/setup-ipa-client.sh
+devices:
+  eth0:
+    network: lxdbr1
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+used_by:
+

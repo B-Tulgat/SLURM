@@ -1,0 +1,99 @@
+name: controller-rhel
+description: ""
+config:
+  cloud-init.user-data: |
+    #cloud-config
+    write_files:
+      - path: /root/setup-ipa-client.sh
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+
+          # Update /etc/hosts with controller and IPA server
+          echo "10.10.1.168 ipa-server.amon.com ipa-server" >> /etc/hosts
+          hostnamectl set-hostname "$(hostname).amon.com"
+          A=$(hostname -I)
+          echo "$A  $(hostname)" >> /etc/hosts
+
+          # Set IPA variables
+          IPA_SERVER="ipa-server.amon.com"
+          IPA_REALM="AMON.COM"
+          IPA_DOMAIN="amon.com"
+
+          # Configure Kerberos settings
+          cat << EOF > /etc/krb5.conf
+          [libdefaults]
+              default_realm = $IPA_REALM
+              dns_lookup_realm = false
+              dns_lookup_kdc = false
+
+          [realms]
+              $IPA_REALM = {
+                  kdc = $IPA_SERVER
+                  admin_server = $IPA_SERVER
+              }
+
+          [domain_realm]
+              .$IPA_DOMAIN = $IPA_REALM
+              $IPA_DOMAIN = $IPA_REALM
+          EOF
+
+          # Install FreeIPA client
+          yum install -y ipa-client
+
+          # Configure DNS resolver
+          rm -f /etc/resolv.conf
+          echo -e "nameserver 10.10.1.168\nsearch amon.com" > /etc/resolv.conf
+
+          # Run the FreeIPA client installer
+          ipa-client-install --domain="$IPA_DOMAIN" \
+            --principal=admin \
+            --password="qweasdrf" \
+            --server="$IPA_SERVER" \
+            --realm="$IPA_REALM" \
+            --no-ntp \
+            --unattended
+
+    runcmd:
+      - dnf update -y
+      - setenforce 0
+      - /root/setup-ipa-client.sh
+      - dnf config-manager --set-enabled powertools -y
+      - dnf install epel-release -y
+      - dnf install munge -y
+      - dnf install munge-libs -y
+      - dnf install munge-devel -y
+      - dnf install libssh2-devel man2html -y
+      - dnf install freeipmi-devel -y
+      - dnf install http-parser-devel json-c-devel libjwt-devel -y
+      - dnf install jq -y
+      - echo "Uo+fZsKZIFWqHRBT7KaXiyjyWk0KYpaO2hO5rtXDOFD4zhduPCsMvpzFmsg+otkGRGLm49wTvmKLHcNIS7NCKZbWlRd27ZT72eHYiWofhaB0C7RGUho8HbyoNswKLv/Boiy6aBbWge6nBHVM+iOBk1oKANFQ3Dqv4VJzBuL+Pe4=" | base64 -d | sudo tee /etc/munge/munge.key > /dev/null
+      - chown -R munge:munge /etc/munge/ /var/log/munge/ /var/lib/munge/ /run/munge/
+      - chmod 0700 /etc/munge/ /var/log/munge/ /var/lib/munge/
+      - chmod 0755 /run/munge/
+      - chmod 0700 /etc/munge/munge.key
+      - chown -R munge:munge /etc/munge/munge.key
+      - systemctl daemon-reload
+      - systemctl restart munge
+      - systemctl enable munge
+      - systemctl start  munge
+      - export VER=24.05.4
+      - dnf install slurm-$VER*rpm slurm-devel-$VER*rpm slurm-perlapi-$VER*rpm slurm-torque-$VER*rpm slurm-example-configs-$VER*rpm -y
+      - systemctl enable slurmctld
+      - mkdir /var/spool/slurmctld /var/log/slurm
+      - chown slurm:slurm /var/spool/slurmctld /var/log/slurm
+      - chmod 755 /var/spool/slurmctld /var/log/slurm
+      - touch /var/log/slurm/slurmctld.log
+      - chown slurm:slurm /var/log/slurm/slurmctld.log
+      - systemctl enable slurmctld
+      - systemctl restart slurmctld
+devices:
+  eth0:
+    network: lxdbr1
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+used_by:
+

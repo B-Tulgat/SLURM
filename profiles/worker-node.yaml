@@ -1,0 +1,84 @@
+name: worker-node
+description: They work
+config:
+  cloud-init.user-data: |
+    #cloud-config
+    write_files:
+      - path: /root/setup-ipa-client.sh
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+
+          echo "10.10.1.168 ipa-server.amon.com ipa-server" >> /etc/hosts
+          if [[ "$(hostname)" != *".amon.com" ]]; then
+            hostnamectl set-hostname "$(hostname).amon.com"
+          fi
+
+          A=$(hostname -I)
+          echo "$A  $(hostname)" >> /etc/hosts
+          IPA_SERVER="ipa-server.amon.com"
+          IPA_REALM="AMON.COM"
+          IPA_DOMAIN="amon.com"
+
+          debconf-set-selections <<< "krb5-config krb5-config/default_realm string $IPA_REALM"
+          debconf-set-selections <<< "krb5-config krb5-config/kerberos_servers string $IPA_SERVER"
+          debconf-set-selections <<< "krb5-config krb5-config/admin_server string $IPA_SERVER"
+          debconf-set-selections <<< "krb5-config krb5-config/realms string $IPA_REALM"
+          debconf-set-selections <<< "krb5-config krb5-config/dns_lookup_realm boolean false"
+          debconf-set-selections <<< "krb5-config krb5-config/dns_lookup_kdc boolean false"
+
+          apt-get install -y freeipa-client
+
+          rm -f /etc/resolv.conf
+          echo -e "nameserver 10.10.1.168\nsearch amon.com" > /etc/resolv.conf
+
+          ipa-client-install --domain="$IPA_DOMAIN" \
+            --principal=admin \
+            --password="qweasdrf" \
+            --server="$IPA_SERVER" \
+            --realm="$IPA_REALM" \
+            --no-ntp \
+            --unattended
+    runcmd:
+      - apt update -y
+      - echo "------------------- Start Munge ---------------------"
+      - apt install munge -y
+      - apt install libmunge2 -y
+      - apt install libmunge-dev -y
+      - echo "Uo+fZsKZIFWqHRBT7KaXiyjyWk0KYpaO2hO5rtXDOFD4zhduPCsMvpzFmsg+otkGRGLm49wTvmKLHcNIS7NCKZbWlRd27ZT72eHYiWofhaB0C7RGUho8HbyoNswKLv/Boiy6aBbWge6nBHVM+iOBk1oKANFQ3Dqv4VJzBuL+Pe4=" | base64 -d | sudo tee /etc/munge/munge.key > /dev/null
+      - chown -R munge:munge /etc/munge/ /var/log/munge/ /var/lib/munge/ /run/munge/
+      - chmod 0700 /etc/munge/ /var/log/munge/ /var/lib/munge/
+      - chmod 0755 /run/munge/
+      - chmod 0700 /etc/munge/munge.key
+      - chown -R munge:munge /etc/munge/munge.key
+      - systemctl enable munge
+      - systemctl restart munge
+      - echo "-------------------Munge Done ---------------------"
+      - systemctl status munge
+      - echo "-------------------Start SLURM --------------------"
+      - apt install -y libpmix-dev
+      - apt install -y slurm-wlm
+      - git clone https://github.com/B-Tulgat/SLURM.git
+      - cp ./SLURM/slurm.conf /etc/slurm/slurm.conf
+      - rm -rf ./SLURM
+      - /root/setup-ipa-client.sh
+      - systemctl enable slurmd
+      - systemctl restart slurmd
+      - systemctl status slurmd
+  user.network-config: |
+    version: 2
+    ethernets:
+      eth0:
+        dhcp4: true
+        match:
+          name: eth0
+        set-name: eth0
+devices:
+  eth0:
+    network: lxdbr1
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+used_by:

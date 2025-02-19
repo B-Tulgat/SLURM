@@ -1,0 +1,72 @@
+name: ipa-client-rhel
+description: ""
+config:
+  cloud-init.user-data: |
+    #cloud-config
+    write_files:
+      - path: /root/setup-ipa-client.sh
+        permissions: '0755'
+        content: |
+          #!/bin/bash
+
+          # Update /etc/hosts with controller and IPA server
+          # echo "10.10.1.151 controller" >> /etc/hosts
+          echo "10.10.1.168 ipa-server.amon.com ipa-server" >> /etc/hosts
+          hostnamectl set-hostname "$(hostname).amon.com"
+          A=$(hostname -I)
+          echo "$A  $(hostname)" >> /etc/hosts
+
+          # Set IPA variables
+          IPA_SERVER="ipa-server.amon.com"
+          IPA_REALM="AMON.COM"
+          IPA_DOMAIN="amon.com"
+
+          # Configure Kerberos settings
+          cat << EOF > /etc/krb5.conf
+          [libdefaults]
+              default_realm = $IPA_REALM
+              dns_lookup_realm = false
+              dns_lookup_kdc = false
+
+          [realms]
+              $IPA_REALM = {
+                  kdc = $IPA_SERVER
+                  admin_server = $IPA_SERVER
+              }
+
+          [domain_realm]
+              .$IPA_DOMAIN = $IPA_REALM
+              $IPA_DOMAIN = $IPA_REALM
+          EOF
+
+          # Install FreeIPA client
+          yum install -y ipa-client
+
+          # Configure DNS resolver
+          rm -f /etc/resolv.conf
+          echo -e "nameserver 10.10.1.168\nsearch amon.com" > /etc/resolv.conf
+
+          # Run the FreeIPA client installer
+          ipa-client-install --domain="$IPA_DOMAIN" \
+            --principal=admin \
+            --password="qweasdrf" \
+            --server="$IPA_SERVER" \
+            --realm="$IPA_REALM" \
+            --no-ntp \
+            --unattended
+
+    runcmd:
+      - yum update -y
+      - setenforce 0
+      - /root/setup-ipa-client.sh
+      - setenforce 1
+devices:
+  eth0:
+    network: lxdbr1
+    type: nic
+  root:
+    path: /
+    pool: default
+    type: disk
+used_by:
+
